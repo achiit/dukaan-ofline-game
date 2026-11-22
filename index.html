@@ -1,0 +1,71 @@
+using UnityEngine;
+
+// Third-person movement using CharacterController.
+// Movement is relative to the camera direction.
+[RequireComponent(typeof(CharacterController))]
+public class PlayerController : MonoBehaviour
+{
+    [Header("References")]
+    public TouchJoystick joystick;
+    public Transform cameraTransform;
+
+    [Header("Movement")]
+    public float walkSpeed = 4f;
+    public float crouchSpeed = 2f;
+    public float rotateSpeed = 12f;
+    public float jumpHeight = 1.2f;
+    public float gravity = -20f;
+
+    CharacterController _cc;
+    Vector3 _velocity;
+    bool _crouching;
+
+    void Awake() { _cc = GetComponent<CharacterController>(); }
+
+    void Update()
+    {
+        Vector2 input = joystick != null ? joystick.Direction : Vector2.zero;
+
+        // Keyboard fallback for testing in the Unity Editor
+        if (input == Vector2.zero)
+            input = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+
+        // Camera-relative direction (flattened)
+        Vector3 fwd = cameraTransform.forward; fwd.y = 0; fwd.Normalize();
+        Vector3 right = cameraTransform.right; right.y = 0; right.Normalize();
+        Vector3 move = fwd * input.y + right * input.x;
+        if (move.sqrMagnitude > 1f) move.Normalize();
+
+        float speed = _crouching ? crouchSpeed : walkSpeed;
+        _cc.Move(move * speed * Time.deltaTime);
+
+        // Face movement direction
+        if (move.sqrMagnitude > 0.01f)
+        {
+            Quaternion target = Quaternion.LookRotation(move);
+            transform.rotation = Quaternion.Slerp(transform.rotation, target, rotateSpeed * Time.deltaTime);
+        }
+
+        // Gravity
+        if (_cc.isGrounded && _velocity.y < 0) _velocity.y = -2f;
+        _velocity.y += gravity * Time.deltaTime;
+        _cc.Move(_velocity * Time.deltaTime);
+
+        if (Input.GetKeyDown(KeyCode.Space)) Jump();
+        if (Input.GetKeyDown(KeyCode.C)) ToggleCrouch();
+    }
+
+    // Hook these to UI buttons (OnClick)
+    public void Jump()
+    {
+        if (_cc.isGrounded && !_crouching)
+            _velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
+    }
+
+    public void ToggleCrouch()
+    {
+        _crouching = !_crouching;
+        _cc.height = _crouching ? 1.0f : 1.8f;
+        _cc.center = new Vector3(0, _cc.height / 2f, 0);
+    }
+}
